@@ -8,10 +8,12 @@ module.exports = {
         return console.log('Error: ' + err);
       }
 
-      db.open(function(err, db) {
+      database = db;
+      console.log('Connected to database.');
+      /*db.open(function(err, db) {
         database = db;
         console.log('Connected to database.');
-      });
+      });*/
     });
   },
   connected: function() {
