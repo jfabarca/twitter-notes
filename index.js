@@ -3,8 +3,15 @@ var express = require('express');
 var querystring = require('querystring');
 var async = require('async');
 var authenticator = require('./authenticator');
+var storage = require('./storage.js');
 var config = require('./config');
 var app = express();
+
+// Connect to MongoDB
+storage.connect();
+
+// Set the view engine to ejs
+app.set('view engine', 'ejs');
 
 // Add cookie parsing functionality to our Express app
 app.use(require('cookie-parser')());
@@ -82,6 +89,71 @@ app.get('/friends', function(req, res) {
       res.send(data);
     }
   );
+});
+
+app.get('/allfriends', function(req, res) {
+  async.waterfall([
+    // Get friends' IDs
+    function(cb) {
+      var cursor = -1;
+      var ids = [];
+
+      // Get IDs by traversing the cursored collection
+      async.whilst(function() {
+        return cursor != 0;
+      }, function(cb) {
+        authenticator.get('https://api.twitter.com/1.1/friends/ids.json?' + querystring.stringify({ cursor: cursor }),
+          req.cookies.access_token, req.cookies.access_token_secret,
+          function(error, data) {
+            if(error) {
+              return res.status(400).send(error);
+            }
+
+            data = JSON.parse(data);
+            cursor = data.next_cursor_str;
+            ids = ids.concat(data.ids);
+
+            cb();
+          }
+        );
+      }, function(error) {
+        if(error) {
+          return res.status(500).send(error);
+        }
+
+        cb(null, ids);
+      });
+    }, function(ids, cb) {
+      // Returns up to 100 ids starting from 100*i
+      var getHundredthIds = function(i) {
+        return ids.slice(100*i, Math.min(ids.length, 100*(i+1)));
+      };
+      var requestsNeeded = Math.ceil(ids.length/100);
+
+      async.times(requestsNeeded, function(n, next) {
+        var url = 'https://api.twitter.com/1.1/users/lookup.json?' + querystring.stringify({ user_id: getHundredthIds(n).join(',') });
+
+        authenticator.get(url,
+          req.cookies.access_token, req.cookies.access_token_secret,
+          function(error, data) {
+            if(error) {
+              return res.status(400).send(error);
+            }
+
+            var friends = JSON.parse(data);
+            next(null, friends);
+          }
+        );
+      }, function(err, friends) {
+        // Flatten friends array
+        friends = friends.reduce(function(previousValue, currentValue, current) {
+          return previousValue.concat(currentValue);
+        });
+
+        res.send(friends);
+      });
+    }
+  ]);
 });
 
 app.listen(config.port, function() {

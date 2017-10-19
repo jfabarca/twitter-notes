@@ -38,7 +38,7 @@ module.exports = {
       return cb('Request does not have all required keys');
     }
 
-    //Clear the request token cookies
+    //Clear the request token data from the cookies
     res.clearCookie('oauth_token');
     res.clearCookie('oauth_token_secret');
 
