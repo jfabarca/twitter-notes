@@ -188,6 +188,9 @@ app.get('/friends/:uid/notes', ensureLoggedIn, function(req, res, next) {
 
 // Add a new note to a friend
 app.post('/friends/:uid/notes', ensureLoggedIn, function(req, res) {
+  if(!req.get('Content-Type')) {
+    return res.status(400).send('Bad Request: Set Content-Type to application/json');
+  }
   storage.insertNote(req.cookies.twitter_id, req.params.uid, req.body.content,
     function(err, note) {
       if(err) {
