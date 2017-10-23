@@ -1,5 +1,6 @@
 var url = require('url');
 var express = require('express');
+var bodyParser = require('body-parser');
 var querystring = require('querystring');
 var async = require('async');
 var authenticator = require('./authenticator');
@@ -15,6 +16,9 @@ app.set('view engine', 'ejs');
 
 // Add cookie parsing functionality to our Express app
 app.use(require('cookie-parser')());
+
+// Parse JSON body and store result in req.body
+app.use(bodyParser.json());
 
 // Take user to Twitter's login page
 app.get('/auth/twitter', authenticator.redirectToTwitterLoginPage);
@@ -163,9 +167,68 @@ app.get('/login', function(req, res) {
   res.render('login');
 });
 
+function ensureLoggedIn(req, res, next) {
+  if(!req.cookies.access_token || !req.cookies.access_token_secret || !req.cookies.twitter_id) {
+    return res.sendStatus(401);
+  }
+
+  next();
+}
+
+// Get notes for a friend
+app.get('/friends/:uid/notes', ensureLoggedIn, function(req, res, next) {
+  storage.getNotes(req.cookies.twitter_id, req.params.uid, function(err, notes) {
+    if(err) {
+      return res.status(500).send(err);
+    }
+
+    res.send(notes);
+  });
+});
+
+// Add a new note to a friend
+app.post('/friends/:uid/notes', ensureLoggedIn, function(req, res) {
+  storage.insertNote(req.cookies.twitter_id, req.params.uid, req.body.content,
+    function(err, note) {
+      if(err) {
+        return res.status(500).send(err);
+      }
+
+      res.send(note);
+    }
+  );
+});
+
+// Update a note
+app.put('/friends/:uid/notes/:noteid', ensureLoggedIn, function(req, res) {
+  var noteId = req.params.noteid;
+
+  storage.updateNote(req.params.noteid, req.cookies.twitter_id, req.body.content,
+    function(err, note) {
+      if(err) {
+        return res.status(500).send(err);
+      }
+
+      res.send(note);
+    }
+  );
+});
+
+// Delete a note
+app.delete('/friends/:uid/notes/:noteid', ensureLoggedIn, function(req, res) {
+  storage.deleteNote(req.params.noteid, req.cookies.twitter_id, function(err) {
+    if(err) {
+      return res.status(500).send(err);
+    }
+
+    res.sendStatus(200);
+  });
+});
+
 // Serve static files in public directory
 app.use(express.static(__dirname + '/public'));
 
+/*
 app.get('/tweet', function(req, res) {
   if(!req.cookies.access_token || !req.cookies.access_token_secret) {
     return res.sendStatus(401);
@@ -225,7 +288,7 @@ app.get('/friends', function(req, res) {
     }
   );
 });
-
+*/
 /*
 app.get('/allfriends', function(req, res) {
   async.waterfall([

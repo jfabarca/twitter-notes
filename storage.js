@@ -1,4 +1,5 @@
 var MongoClient = require('mongodb').MongoClient;
+var ObjectID = require('mongodb').ObjectID;
 var database;
 
 module.exports = {
@@ -32,5 +33,50 @@ module.exports = {
         console.log('Cannot insert friends to database.');
       }
     });
+  },
+  getNotes: function(ownerId, friendId, cb) {
+    var cursor = database.collection('notes').find({
+      owner_id: ownerId,
+      friend_id: friendId
+    });
+    cursor.toArray(cb);
+  },
+  insertNote: function(ownerId, friendId, content, cb) {
+    database.collection('notes').insert({
+      owner_id: ownerId,
+      friend_id: friendId,
+      content: content
+    }, function(err, result) {
+      if(err) {
+        return cb(err, result);
+      }
+
+      cb(null, {
+        _id: result.ops[0]._id,
+        content: result.ops[0].content
+      });
+    });
+  },
+  updateNote: function(noteId, ownerId, content, cb) {
+    database.collection('notes').updateOne({
+      _id: new ObjectID(noteId),
+      owner_id: ownerId // Used to protect other users' data
+    }, {
+      $set: {content: content}
+    }, function(err, result) {
+      if(err) {
+        return cb(err);
+      }
+
+      database.collection('notes').findOne({
+        _id: new ObjectID(noteId)
+      }, cb);
+    });
+  },
+  deleteNote: function(noteId, ownerId, cb) {
+    database.collection('notes').deleteOne({
+      _id: new ObjectID(noteId),
+      owner_id: ownerId // Used to protect other users' data
+    }, cb);
   }
 };
